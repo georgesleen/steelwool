@@ -1,0 +1,6 @@
+[passes]
+provide-one-per-line = false
+sort-require = false
+attach-doc-comments = false
+blank-lines = false
+align-let-bindings = false

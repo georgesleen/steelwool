@@ -1,0 +1,17 @@
+;; fmt: off
+(define matrix
+  '(( 1  0  0 )
+    ( 0  1  0 )
+    ( 0  0  1 )))
+;; fmt: on
+
+(define squashed (+ 1 2))
+
+(define (table)
+  ;; fmt: off
+  '((a   1)
+    (bb  2))
+  ;; fmt: on
+  )
+
+(define after 2)

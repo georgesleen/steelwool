@@ -1,0 +1,10 @@
+(define symbols '(alpha beta (gamma . delta)))
+
+(define template `(head ,middle ,@tail))
+
+(define syntax-forms
+  (list #'identifier #`(template ,value) #,spliced #,@spliced-list))
+
+(define vectors (list #(1 2 3) #u8(4 5 6)))
+
+(define with-dead-code (list 1 #;(dead expression) 2))

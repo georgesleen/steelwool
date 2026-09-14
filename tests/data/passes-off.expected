@@ -1,0 +1,13 @@
+(require "zeta.scm")
+(require "alpha.scm")
+
+(provide beta alpha gamma)
+;;@doc
+;; Documented.
+
+(define (documented) 1)
+(define (short-bindings input)
+  (let ([a (first input)] [b (second input)])
+    (combine a
+             b
+             (a-deliberately-long-call-that-forces-the-body-to-wrap input))))

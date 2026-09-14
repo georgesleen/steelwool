@@ -1,0 +1,7 @@
+;;@doc
+;; Formats a buffer.
+(define (format-buffer buffer) (format buffer))
+
+;;@doc
+;; Reads a buffer.
+(define (read-buffer buffer) (read buffer))
