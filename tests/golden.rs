@@ -100,6 +100,34 @@ fn formatting_preserves_the_program() {
     }
 }
 
+/// The equivalence check has to reject changes, including comment changes: a
+/// `;;@doc` block becomes an `@doc` form in the Steel AST.
+#[test]
+fn the_equivalence_check_rejects_a_changed_program() {
+    let changes = [
+        ("(define x 1)", "(define x 2)"),
+        ("(list a b)", "(list b a)"),
+        ("(define x 1) ;; note", "(define x 1)"),
+        (
+            ";;@doc\n;; Adds.\n(define (f a) a)",
+            ";;@doc\n;; Subtracts.\n(define (f a) a)",
+        ),
+        ("(require \"a.scm\" \"b.scm\")", "(require \"a.scm\")"),
+    ];
+    for (before, after) in changes {
+        check_equivalence(before, after).expect_err(&format!(
+            "{before:?} and {after:?} must not compare equal"
+        ));
+    }
+
+    // Reordering a require is the one change the passes are allowed to make.
+    check_equivalence(
+        "(require \"b.scm\" \"a.scm\")",
+        "(require \"a.scm\" \"b.scm\")",
+    )
+    .expect("a sorted require is still the same program");
+}
+
 /// Lines that may exceed the width: the formatter never rewraps comment text,
 /// never moves a trailing comment off its line, and cannot split an atom.
 fn excusable_lines(formatted: &str, width: usize) -> Vec<bool> {

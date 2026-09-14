@@ -15,10 +15,12 @@ enum Sexp {
     List(char, Vec<Sexp>),
 }
 
-/// Lexes `source` into datum trees, dropping comments and whitespace.
+/// Lexes `source` into datum trees. Comments are datums here: a `;;@doc` block
+/// becomes an `@doc` form in the Steel AST, so losing or rewording a comment
+/// can change the program.
 fn datums(source: &str) -> Result<Vec<Sexp>, Error> {
     let mut stack: Vec<(char, Vec<Sexp>)> = vec![('\0', Vec::new())];
-    for token in TokenStream::new(source, true, None) {
+    for token in TokenStream::new(source, false, None) {
         let token = token.map_err(|error| Error::Lex {
             message: error.ty.to_string(),
             offset: error.span.start(),
@@ -50,7 +52,7 @@ fn datums(source: &str) -> Result<Vec<Sexp>, Error> {
                 .last_mut()
                 .expect("root frame is never popped")
                 .1
-                .push(Sexp::Atom(token.source.to_string())),
+                .push(Sexp::Atom(token.source.trim_end().to_string())),
         }
     }
     if stack.len() != 1 {
@@ -101,10 +103,15 @@ fn canonicalize_nested(form: &mut Sexp) {
     for item in items.iter_mut() {
         canonicalize_nested(item);
     }
-    if items.first() != Some(&Sexp::Atom("require".to_string()))
-        || items.len() < 3
-        || items[1..].contains(&Sexp::Atom("as".to_string()))
+    if items.len() < 3
+        || items.first() != Some(&Sexp::Atom("require".to_string()))
     {
+        return;
+    }
+    let positional_or_commented = items[1..].iter().any(|item| {
+        matches!(item, Sexp::Atom(text) if text == "as" || text.starts_with(';'))
+    });
+    if positional_or_commented {
         return;
     }
     items[1..].sort();
