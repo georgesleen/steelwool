@@ -1,0 +1,14 @@
+[package]
+name = "steelwool"
+version = "0.1.0"
+edition = "2024"
+license = "LGPL-3.0-or-later"
+repository = "https://github.com/georgesleen/steelwool"
+description = "Opinionated formatter for Steel"
+
+[dependencies]
+steel-parser = { git = "https://github.com/mattwparas/steel.git", rev = "1b785a4e9d24e3553b242522b35d4498dae72816" }
+toml = "1"
+
+[dev-dependencies]
+steel-parser = { git = "https://github.com/mattwparas/steel.git", rev = "1b785a4e9d24e3553b242522b35d4498dae72816" }
