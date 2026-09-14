@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Local gate, mirrored in CI.
+set -euo pipefail
+
+make check
