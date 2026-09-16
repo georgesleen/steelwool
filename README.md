@@ -31,8 +31,22 @@ gets a changelog entry of its own every time.
 ## Install and use
 
 ```sh
+nix profile install github:georgesleen/steelwool/v0.2.0
+```
+
+Or run it without installing:
+
+```sh
+nix run github:georgesleen/steelwool/v0.2.0 -- --check src/*.scm
+```
+
+For development:
+
+```sh
+git clone https://github.com/georgesleen/steelwool
+cd steelwool
 nix develop          # or direnv allow
-make build
+make check
 ```
 
 ```sh
