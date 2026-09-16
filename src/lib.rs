@@ -1,5 +1,7 @@
 pub mod config;
 pub mod cst;
+pub mod diagnostics;
+pub mod diff;
 pub mod layout;
 pub mod passes;
 pub mod verify;
@@ -31,23 +33,37 @@ pub enum Error {
     Config(config::ConfigError),
 }
 
+impl Error {
+    /// The byte offset the error points at, for the errors that have one.
+    /// The binary turns it into a line and column.
+    pub fn offset(&self) -> Option<u32> {
+        match self {
+            Error::Lex { offset, .. }
+            | Error::UnclosedList { offset }
+            | Error::UnexpectedClose { offset }
+            | Error::MismatchedDelimiter { offset }
+            | Error::DanglingPrefix { offset } => Some(*offset),
+            Error::ProgramChanged
+            | Error::OutputRejected(_)
+            | Error::NotIdempotent
+            | Error::Config(_) => None,
+        }
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Lex { message, offset } => {
-                write!(f, "byte {offset}: {message}")
+            Error::Lex { message, .. } => write!(f, "{message}"),
+            Error::UnclosedList { .. } => write!(f, "unclosed list"),
+            Error::UnexpectedClose { .. } => {
+                write!(f, "unexpected closing delimiter")
             }
-            Error::UnclosedList { offset } => {
-                write!(f, "byte {offset}: unclosed list")
+            Error::MismatchedDelimiter { .. } => {
+                write!(f, "mismatched closing delimiter")
             }
-            Error::UnexpectedClose { offset } => {
-                write!(f, "byte {offset}: unexpected closing delimiter")
-            }
-            Error::MismatchedDelimiter { offset } => {
-                write!(f, "byte {offset}: mismatched closing delimiter")
-            }
-            Error::DanglingPrefix { offset } => {
-                write!(f, "byte {offset}: quote prefix with nothing after it")
+            Error::DanglingPrefix { .. } => {
+                write!(f, "quote prefix with nothing after it")
             }
             Error::ProgramChanged => {
                 write!(f, "internal error: formatting changed the program")
