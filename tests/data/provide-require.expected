@@ -2,11 +2,11 @@
 (require "helix/misc.scm")
 (require-builtin helix/core/text as text.)
 
-(provide format-buffer
+(provide classify-value
+         format-buffer
          read-buffer
-         write-buffer
-         classify-value
-         render-status-line)
+         render-status-line
+         write-buffer)
 
 (require (only-in "alpha.scm" alpha) (only-in "zeta.scm" zeta))
 

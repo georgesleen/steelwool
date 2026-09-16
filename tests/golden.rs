@@ -8,6 +8,8 @@ use steelwool::config::{Config, Layers};
 use steelwool::verify::{check_equivalence, check_idempotence};
 use steelwool::{Error, format_source};
 
+mod support;
+
 fn data_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data")
 }
@@ -113,6 +115,11 @@ fn the_equivalence_check_rejects_a_changed_program() {
             ";;@doc\n;; Subtracts.\n(define (f a) a)",
         ),
         ("(require \"a.scm\" \"b.scm\")", "(require \"a.scm\")"),
+        (";; note", ";; other note"),
+        (";;@doc x", ";; @doc x"),
+        ("(quote a b)", "(quote b a)"),
+        ("'(a)", "'(b)"),
+        ("(list #t)", "(list #t #t)"),
     ];
     for (before, after) in changes {
         check_equivalence(before, after).expect_err(&format!(
@@ -120,66 +127,110 @@ fn the_equivalence_check_rejects_a_changed_program() {
         ));
     }
 
-    // Reordering a require is the one change the passes are allowed to make.
-    check_equivalence(
-        "(require \"b.scm\" \"a.scm\")",
-        "(require \"a.scm\" \"b.scm\")",
-    )
-    .expect("a sorted require is still the same program");
-}
-
-/// Lines that may exceed the width: the formatter never rewraps comment text,
-/// never moves a trailing comment off its line, and cannot split an atom.
-fn excusable_lines(formatted: &str, width: usize) -> Vec<bool> {
-    let starts: Vec<usize> = std::iter::once(0)
-        .chain(formatted.match_indices('\n').map(|(index, _)| index + 1))
-        .collect();
-    let line_of = |offset: usize| match starts.binary_search(&offset) {
-        Ok(line) => line,
-        Err(next) => next - 1,
-    };
-    let mut excusable = vec![false; starts.len()];
-    for token in TokenStream::new(formatted, false, None) {
-        let token = token.expect("formatted output lexes");
-        let first = line_of(token.span.start() as usize);
-        let last = line_of(token.span.end().saturating_sub(1) as usize);
-        let indent = formatted[starts[first]..]
-            .chars()
-            .take_while(|character| *character == ' ')
-            .count();
-        let excused = token.ty == TokenType::Comment
-            || last > first
-            || indent + token.source.chars().count() > width;
-        for line in first..=last.min(excusable.len() - 1) {
-            excusable[line] |= excused;
-        }
+    // The rewrites the passes are allowed to make, oracle rules R1 to R5.
+    let rewrites = [
+        (
+            "(require \"b.scm\" \"a.scm\")",
+            "(require \"a.scm\" \"b.scm\")",
+        ),
+        ("(provide b a)", "(provide a b)"),
+        (";one", ";; one"),
+        ("(quote (a b))", "'(a b)"),
+        ("(quasiquote (a (unquote b)))", "`(a ,b)"),
+        ("(list #true #false)", "(list #t #f)"),
+    ];
+    for (before, after) in rewrites {
+        check_equivalence(before, after).unwrap_or_else(|error| {
+            panic!("{before:?} and {after:?} are the same program: {error}")
+        });
     }
-    excusable
 }
 
-/// No line exceeds the configured width unless it provably cannot be split.
-#[test]
-fn code_lines_respect_the_width() {
+/// Every input in the suite, formatted with its own configuration.
+fn suite() -> Vec<(PathBuf, Config, String)> {
+    let mut formatted = Vec::new();
     for directory in [data_directory(), corpus_directory()] {
         for input in inputs(&directory) {
             let source =
                 std::fs::read_to_string(&input).expect("input is readable");
             let config = config_for(&input);
-            let formatted = format_source(&source, &config)
+            let output = format_source(&source, &config)
                 .unwrap_or_else(|error| panic!("{}: {error}", input.display()));
-            let excusable = excusable_lines(&formatted, config.width);
-            for (number, line) in formatted.lines().enumerate() {
-                if line.chars().count() <= config.width {
-                    continue;
-                }
-                assert!(
-                    excusable[number],
-                    "{}:{}: {} columns: {line}",
-                    input.display(),
-                    number + 1,
-                    line.chars().count()
-                );
+            formatted.push((input, config, output));
+        }
+    }
+    formatted
+}
+
+/// No line exceeds the configured width unless it provably cannot be split.
+#[test]
+fn code_lines_respect_the_width() {
+    for (input, config, formatted) in suite() {
+        if let Some((number, line)) =
+            support::unexcused_overruns(&formatted, config.width)
+                .into_iter()
+                .next()
+        {
+            panic!(
+                "{}:{number}: {} columns: {line}",
+                input.display(),
+                line.chars().count()
+            );
+        }
+    }
+}
+
+/// Rule L3.
+#[test]
+fn output_ends_with_one_newline() {
+    for (input, _, formatted) in suite() {
+        assert!(
+            formatted.ends_with('\n') && !formatted.ends_with("\n\n"),
+            "{}",
+            input.display()
+        );
+    }
+    assert_eq!(
+        format_source("", &Config::default()).expect("empty input formats"),
+        ""
+    );
+}
+
+/// Rule L4.
+#[test]
+fn no_line_ends_in_whitespace() {
+    for (input, _, formatted) in suite() {
+        for (number, line) in formatted.lines().enumerate() {
+            assert_eq!(
+                line.trim_end(),
+                line,
+                "{}:{}",
+                input.display(),
+                number + 1
+            );
+        }
+    }
+}
+
+/// Rule L5. A tab is only ever passed through from a string literal or from
+/// comment text, neither of which the formatter rewrites.
+#[test]
+fn no_tabs_outside_strings_and_comments() {
+    for (input, _, formatted) in suite() {
+        let mut allowed = vec![false; formatted.len()];
+        for token in TokenStream::new(&formatted, false, None) {
+            let token = token.expect("formatted output lexes");
+            if !matches!(
+                token.ty,
+                TokenType::StringLiteral(_) | TokenType::Comment
+            ) {
+                continue;
             }
+            let span = token.span.start() as usize..token.span.end() as usize;
+            allowed[span].fill(true);
+        }
+        for (offset, _) in formatted.match_indices('\t') {
+            assert!(allowed[offset], "{}:{offset}", input.display());
         }
     }
 }

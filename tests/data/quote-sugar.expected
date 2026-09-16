@@ -1,0 +1,19 @@
+(define empty '())
+
+(define names '(alpha beta))
+
+(define nested ''inner)
+
+(define template `(head ,value ,@rest))
+
+(define flags (list '#t #f 'on))
+
+(define long-form (quote a b))
+
+(define vector-literal #(quote x))
+
+(define-syntax pick (syntax-rules () [(_ key) (hash-insert conf 'key #t)]))
+
+(define commented
+  (quote ; a comment blocks the shorthand
+         value))

@@ -4,3 +4,7 @@ sort-require = false
 attach-doc-comments = false
 blank-lines = false
 align-let-bindings = false
+comment-style = false
+quote-sugar = false
+boolean-spelling = false
+sort-provide = false

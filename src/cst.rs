@@ -84,6 +84,11 @@ impl Node {
     pub fn is_line_comment(&self) -> bool {
         matches!(&self.kind, NodeKind::Comment(comment) if !comment.block)
     }
+
+    /// A comment of either kind, whose position in a form carries meaning.
+    pub fn is_comment(&self) -> bool {
+        matches!(&self.kind, NodeKind::Comment(_))
+    }
 }
 
 struct Tok<'a> {
@@ -196,7 +201,8 @@ impl Frame {
     }
 }
 
-fn prefix_text(ty: &TokenType<InternedString>) -> bool {
+/// A quote-like prefix token, which binds to the datum that follows it.
+pub fn is_prefix(ty: &TokenType<InternedString>) -> bool {
     matches!(
         ty,
         TokenType::QuoteTick
@@ -276,7 +282,7 @@ fn assemble(tokens: &[Tok<'_>]) -> Result<Vec<Node>, Error> {
                     blank_before: token.blank_before,
                 });
             }
-            ty if prefix_text(ty) => {
+            ty if is_prefix(ty) => {
                 frame.pending.push(Pending {
                     text: token.text.to_string(),
                     start: token.start,

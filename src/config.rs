@@ -26,6 +26,14 @@ pub struct Passes {
     pub blank_lines: bool,
     /// Align `let` bindings under the first binding.
     pub align_let_bindings: bool,
+    /// Two semicolons on an own-line comment, one on a trailing comment.
+    pub comment_style: bool,
+    /// Reader shorthand for a two item quoting form.
+    pub quote_sugar: bool,
+    /// `#t` and `#f` rather than `#true` and `#false`.
+    pub boolean_spelling: bool,
+    /// Sort the names within a `provide` form.
+    pub sort_provide: bool,
 }
 
 impl Default for Config {
@@ -45,6 +53,10 @@ impl Default for Passes {
             attach_doc_comments: true,
             blank_lines: true,
             align_let_bindings: true,
+            comment_style: true,
+            quote_sugar: true,
+            boolean_spelling: true,
+            sort_provide: true,
         }
     }
 }
@@ -197,24 +209,20 @@ fn merge(into: &mut Table, from: Table) {
     }
 }
 
-fn boolean(
-    table: &Table,
-    key: &str,
-    origin: &str,
-    field: &mut bool,
-) -> Result<(), ConfigError> {
-    match table.get(key) {
-        None => Ok(()),
-        Some(Value::Boolean(value)) => {
-            *field = *value;
-            Ok(())
-        }
-        Some(_) => Err(ConfigError::WrongType {
-            origin: origin.to_string(),
-            key: key.to_string(),
-            expected: "a boolean",
-        }),
-    }
+/// The field one `[passes]` key writes to, or `None` for an unknown key.
+fn knob<'a>(passes: &'a mut Passes, key: &str) -> Option<&'a mut bool> {
+    Some(match key {
+        "provide-one-per-line" => &mut passes.provide_one_per_line,
+        "sort-require" => &mut passes.sort_require,
+        "attach-doc-comments" => &mut passes.attach_doc_comments,
+        "blank-lines" => &mut passes.blank_lines,
+        "align-let-bindings" => &mut passes.align_let_bindings,
+        "comment-style" => &mut passes.comment_style,
+        "quote-sugar" => &mut passes.quote_sugar,
+        "boolean-spelling" => &mut passes.boolean_spelling,
+        "sort-provide" => &mut passes.sort_provide,
+        _ => return None,
+    })
 }
 
 /// Parses `table` into a `Config`, rejecting any key it does not recognise.
@@ -242,8 +250,8 @@ pub fn from_table(table: &Table, origin: &str) -> Result<Config, ConfigError> {
     }
 
     let passes = match table.get("passes") {
-        None => Table::new(),
-        Some(Value::Table(passes)) => passes.clone(),
+        None => None,
+        Some(Value::Table(passes)) => Some(passes),
         Some(_) => {
             return Err(ConfigError::NotATable {
                 origin: origin.to_string(),
@@ -252,50 +260,22 @@ pub fn from_table(table: &Table, origin: &str) -> Result<Config, ConfigError> {
         }
     };
 
-    boolean(
-        &passes,
-        "provide-one-per-line",
-        origin,
-        &mut config.passes.provide_one_per_line,
-    )?;
-    boolean(
-        &passes,
-        "sort-require",
-        origin,
-        &mut config.passes.sort_require,
-    )?;
-    boolean(
-        &passes,
-        "attach-doc-comments",
-        origin,
-        &mut config.passes.attach_doc_comments,
-    )?;
-    boolean(
-        &passes,
-        "blank-lines",
-        origin,
-        &mut config.passes.blank_lines,
-    )?;
-    boolean(
-        &passes,
-        "align-let-bindings",
-        origin,
-        &mut config.passes.align_let_bindings,
-    )?;
-
-    const KNOWN_PASSES: [&str; 5] = [
-        "provide-one-per-line",
-        "sort-require",
-        "attach-doc-comments",
-        "blank-lines",
-        "align-let-bindings",
-    ];
-    for key in passes.keys() {
-        if !KNOWN_PASSES.contains(&key.as_str()) {
+    for (key, value) in passes.into_iter().flatten() {
+        let Some(field) = knob(&mut config.passes, key) else {
             return Err(ConfigError::UnknownKey {
                 origin: origin.to_string(),
                 key: format!("passes.{key}"),
             });
+        };
+        match value {
+            Value::Boolean(value) => *field = *value,
+            _ => {
+                return Err(ConfigError::WrongType {
+                    origin: origin.to_string(),
+                    key: key.clone(),
+                    expected: "a boolean",
+                });
+            }
         }
     }
     for key in table.keys() {

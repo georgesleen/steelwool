@@ -1,3 +1,5 @@
+;single semicolon stays put
+(define flags (list (quote on) #true))
 (require "zeta.scm")
 (require "alpha.scm")
 
