@@ -11,4 +11,5 @@ steel-parser = { git = "https://github.com/mattwparas/steel.git", rev = "1b785a4
 toml = "1"
 
 [dev-dependencies]
+proptest = { version = "1.11.0", default-features = false, features = ["std", "bit-set", "fork", "timeout"] }
 steel-parser = { git = "https://github.com/mattwparas/steel.git", rev = "1b785a4e9d24e3553b242522b35d4498dae72816" }
