@@ -39,19 +39,25 @@ make build
 steelwool src/*.scm                  # rewrite in place
 steelwool                            # stdin to stdout
 echo '(define(f x)(+ x 1))' | steelwool -
-steelwool --check src/*.scm          # write nothing, exit 1 if anything would change
+steelwool --check src/*.scm          # report files that would change
+steelwool --diff src/*.scm           # print unified diffs
+steelwool --list-different src/*.scm # print changed paths
 ```
 
 | Option | Effect |
 | --- | --- |
 | `FILES...` | Format each file in place. |
-| none, or `-` | Read stdin, write stdout. |
-| `--check` | Write nothing. Exit 1 if any input would change. |
+| none, or `-` | Read stdin and write stdout. |
+| `--check` | Write nothing. Report every input that would change. |
+| `--diff` | Write nothing. Print a unified diff for every changed input. |
+| `--list-different` | Write nothing. Print every changed input path. |
 | `--config PATH` | Use `PATH` instead of searching for a config file. |
 | `--config-toml TOML` | Apply a TOML string as a configuration layer. |
 | `--set KEY.PATH=VALUE` | Override one dotted key with a TOML value. Repeatable. |
 
-Exit codes: `0` clean, `1` something would change under `--check`, `2` error.
+The three write-nothing modes compose. Exit codes: `0` clean, `1` something
+would change in a write-nothing mode, `2` error. An error in one file does not
+stop the others; exit `2` takes precedence over exit `1`.
 
 Layers apply lowest to highest: built-in defaults, then the config file, then
 `--config-toml`, then each `--set` in order.
@@ -78,6 +84,10 @@ sort-require = true
 attach-doc-comments = true
 blank-lines = true
 align-let-bindings = true
+comment-style = true
+quote-sugar = true
+boolean-spelling = true
+sort-provide = true
 ```
 
 Indentation is fixed at two spaces, with hanging indents under special forms,
@@ -87,13 +97,18 @@ and is not configurable.
 | --- | --- |
 | `width` | Wraps code at 80 columns. |
 | `provide-one-per-line` | A `provide` with more than one name takes one name per line. |
-| `sort-require` | Sorts the clauses inside a `require` and the forms inside a run of adjacent top-level `require` forms. |
-| `attach-doc-comments` | Deletes any blank line between a `;;@doc` comment block and the form it documents. |
-| `blank-lines` | Exactly one blank line between top-level forms, none inside a require block, none between a leading comment and its form. |
-| `align-let-bindings` | Once a `let` has to break, its bindings take one line each, aligned under the first binding. |
+| `sort-require` | Sorts clauses inside a `require` and adjacent top-level require forms. |
+| `attach-doc-comments` | Deletes any blank line between a `;;@doc` block and its form. |
+| `blank-lines` | Uses one blank line between top-level forms, except within require blocks and after leading comments. |
+| `align-let-bindings` | Gives each binding its own line once a `let` breaks. |
+| `comment-style` | Uses `;;` for own-line comments and `;` for trailing comments. |
+| `quote-sugar` | Writes `'`, `` ` ``, `,`, and `,@` reader shorthand. |
+| `boolean-spelling` | Writes booleans as `#t` and `#f`. |
+| `sort-provide` | Sorts names and clauses inside a `provide`. |
 
 `sort-require` leaves a `require` alone when a clause is the bare symbol `as`,
-since `(require-builtin helix/core/text as text.)` is positional.
+since `(require-builtin helix/core/text as text.)` is positional. Both sorting
+passes leave a form alone when comments sit among its clauses.
 
 ## Escape hatch
 
@@ -116,20 +131,25 @@ of the file.
 Formatting must never change the program. Two checks enforce that:
 
 - **Parse equivalence.** `steelwool::verify::check_equivalence` lexes the input
-  and the output into span-free, comment-free datum trees and compares them,
-  after applying the reorderings the passes are allowed to perform. It also
-  requires that the Steel parser still accepts the output and still sees the
-  same number of top-level forms. `format_source` runs this on every call and
-  returns an error rather than emitting output that fails it.
+  and output into span-free datum trees, comments included, and compares them
+  after canonicalising only the rewrites named in the specification. It also
+  requires that the Steel parser still accepts valid input after formatting
+  and still sees the same number of top-level forms. `format_source` runs this
+  on every call and returns an error rather than emitting output that fails it.
 - **Idempotence.** `steelwool::verify::check_idempotence` formats twice and
   compares.
 
-The test suite runs both over every input under `tests/data` and over
-`tests/corpus`, which holds the ten Steel cogs shipped inside the Helix fork.
+The golden suite runs both checks over every input under `tests/data` and the
+ten Steel cogs under `tests/corpus`. Property tests generate additional Steel
+source and check equivalence, idempotence, width, and panic freedom.
 
 Comment text is never rewrapped and a trailing comment is never moved off its
-line, so a line whose length comes from comment text, or from a single atom too
-long to split, can exceed `width`. The suite asserts that nothing else does.
+line, so a line whose length comes from comment text, a string literal, or an
+atom too long to split can exceed `width`. The suite asserts that nothing else
+does.
+
+The normative rules and their locking tests are in
+[`docs/spec/`](docs/spec/).
 
 ## Working with the parser
 
@@ -151,6 +171,13 @@ follow a comment.
 `List::location` all take part in it, and the ids are freshly allocated per
 parse, so two parses of the same text compare unequal. Hence the datum-tree
 comparison above rather than `before == after` on the AST.
+
+## Workarounds
+
+- `src/verify.rs::parser_verdict`: the pinned Steel parser panics on some
+  malformed quote contexts, including `'(quasiquote)`. The equivalence oracle
+  catches that upstream panic so malformed input returns a result instead of
+  aborting steelwool.
 
 ## Development
 

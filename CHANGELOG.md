@@ -3,6 +3,22 @@
 All notable changes to steelwool. Pre-1.0: a breaking change may land in any
 `0.y` bump.
 
+## 0.2.0
+
+- New default-on passes: `comment-style`, `quote-sugar`,
+  `boolean-spelling`, and `sort-provide`.
+- The equivalence oracle understands each allowed rewrite explicitly and
+  catches panics from the pinned Steel parser rather than crashing.
+- `--diff` and `--list-different` report changes without writing. They compose
+  with `--check`.
+- Source errors report one-based `PATH:LINE:COLUMN` locations. File inputs are
+  formatted in parallel, reported in argument order, and one failure no longer
+  prevents the remaining inputs from being processed.
+- Property tests generate Steel source and check equivalence, idempotence,
+  width, and panic freedom in addition to the golden and real-corpus suites.
+- Normative layout, pass, correctness, and CLI specifications live under
+  `docs/spec/`.
+
 ## 0.1.0
 
 First release.
